@@ -139,16 +139,20 @@ class CSVMessageStore:
         """
         try:
             async with self._lock:
+                logger.info(f"Ищем пользователя для channel_message_id: {channel_message_id}")
+                
                 with open(self.filename, 'r', encoding='utf-8') as csvfile:
                     reader = csv.DictReader(csvfile)
                     
-                    # Ищем последнее совпадение (самое актуальное)
-                    user_id = None
+                    # Ищем точное совпадение по channel_message_id
                     for row in reader:
                         if int(row['channel_message_id']) == channel_message_id:
                             user_id = int(row['user_id'])
+                            logger.info(f"Найден пользователь: {user_id} для сообщения {channel_message_id}")
+                            return user_id
                     
-                    return user_id
+                    logger.warning(f"Пользователь для сообщения {channel_message_id} не найден")
+                    return None
                     
         except Exception as e:
             logger.error(f"Ошибка получения пользователя: {e}")
@@ -241,3 +245,21 @@ class CSVMessageStore:
                 
         except Exception:
             return 0
+    
+    def debug_print_mappings(self):
+        """
+        Отладочный метод для вывода содержимого CSV файла
+        """
+        try:
+            if not os.path.exists(self.filename):
+                logger.info("CSV файл не существует")
+                return
+            
+            logger.info(f"Содержимое CSV файла {self.filename}:")
+            with open(self.filename, 'r', encoding='utf-8') as csvfile:
+                reader = csv.DictReader(csvfile)
+                for i, row in enumerate(reader, 1):
+                    logger.info(f"  {i}: {row}")
+                    
+        except Exception as e:
+            logger.error(f"Ошибка при чтении CSV файла для отладки: {e}")

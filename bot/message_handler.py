@@ -208,6 +208,7 @@ class MessageHandler:
             user_id: ID пользователя для пересылки
         """
         try:
+            logger.info(f"Пересылаем ответ пользователю {user_id}, тип контента: {message.content_type}")
             content_type = message.content_type
             
             if content_type == ContentType.TEXT:
@@ -215,6 +216,7 @@ class MessageHandler:
                     chat_id=user_id,
                     text=f"Ответ из канала:\n\n{message.text}"
                 )
+                logger.info(f"Текстовый ответ отправлен пользователю {user_id}")
             
             elif content_type == ContentType.PHOTO:
                 caption = "Ответ из канала"
@@ -226,6 +228,7 @@ class MessageHandler:
                     photo=message.photo[-1].file_id,
                     caption=caption
                 )
+                logger.info(f"Фото ответ отправлено пользователю {user_id}")
             
             elif content_type == ContentType.VIDEO:
                 caption = "Ответ из канала"
@@ -237,6 +240,7 @@ class MessageHandler:
                     video=message.video.file_id,
                     caption=caption
                 )
+                logger.info(f"Видео ответ отправлено пользователю {user_id}")
             
             elif content_type == ContentType.DOCUMENT:
                 caption = "Ответ из канала"
@@ -248,6 +252,7 @@ class MessageHandler:
                     document=message.document.file_id,
                     caption=caption
                 )
+                logger.info(f"Документ ответ отправлен пользователю {user_id}")
             
             elif content_type == ContentType.VOICE:
                 await self.bot.send_voice(
@@ -255,6 +260,7 @@ class MessageHandler:
                     voice=message.voice.file_id,
                     caption="Ответ из канала"
                 )
+                logger.info(f"Голосовой ответ отправлен пользователю {user_id}")
             
             elif content_type == ContentType.AUDIO:
                 caption = "Ответ из канала"
@@ -266,12 +272,16 @@ class MessageHandler:
                     audio=message.audio.file_id,
                     caption=caption
                 )
+                logger.info(f"Аудио ответ отправлен пользователю {user_id}")
             
             else:
                 await self.bot.send_message(
                     chat_id=user_id,
                     text="Получен ответ из канала (неподдерживаемый тип контента)"
                 )
+                logger.info(f"Ответ с неподдерживаемым типом контента отправлен пользователю {user_id}")
                 
         except Exception as e:
             logger.error(f"Ошибка при пересылке ответа пользователю {user_id}: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")

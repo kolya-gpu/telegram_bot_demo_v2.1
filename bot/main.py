@@ -50,8 +50,9 @@ if USE_WEBHOOK and not WEBHOOK_URL:
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# Создаем CSV хранилище для сообщений
-csv_storage = CSVMessageStore("message_mapping.csv")
+# Создаем CSV хранилище для сообщений (путь из корневой директории проекта)
+csv_file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "message_mapping.csv")
+csv_storage = CSVMessageStore(csv_file_path)
 
 # Создаем обработчик сообщений с CSV хранилищем
 message_handler = MessageHandler(bot, CHANNEL_ID, csv_storage)
@@ -110,6 +111,9 @@ async def on_startup(app):
     await csv_storage.init()
     logger.info("CSV хранилище инициализировано")
     
+    # Отладочная информация о содержимом CSV
+    csv_storage.debug_print_mappings()
+    
     if USE_WEBHOOK:
         # Устанавливаем webhook для получения обновлений от Telegram
         await bot.set_webhook(
@@ -146,6 +150,10 @@ async def run_polling():
     """
     logger.info("Запуск в режиме long polling...")
     await csv_storage.init()
+    
+    # Отладочная информация о содержимом CSV
+    csv_storage.debug_print_mappings()
+    
     try:
         # На всякий случай удаляем вебхук, чтобы переключиться на polling
         await bot.delete_webhook(drop_pending_updates=True)
