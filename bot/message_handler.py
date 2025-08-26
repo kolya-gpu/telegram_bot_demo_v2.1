@@ -14,8 +14,10 @@ import logging
 from typing import Union
 from aiogram import Bot
 from aiogram.types import Message, ContentType
+from logging_config import setup_logging
 
-logger = logging.getLogger(__name__)
+# Инициализируем логирование
+logger = setup_logging("message_handler", "message_handler.log", 5*1024*1024)  # 5MB
 
 
 class MessageHandler:

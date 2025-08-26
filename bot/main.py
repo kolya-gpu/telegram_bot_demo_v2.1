@@ -24,19 +24,42 @@ from aiohttp import web
 from dotenv import load_dotenv
 from message_handler import MessageHandler
 from csv_storage import CSVMessageStore
+from logging_config import setup_logging
+import socket
 
 # Загружаем переменные окружения из .env файла
 load_dotenv()
 
-# Настройка логирования
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Инициализируем логирование
+logger = setup_logging("main", "bot.log", 10*1024*1024)  # 10MB для основного лога
+
+def is_port_available(host: str, port: int) -> bool:
+    """
+    Проверяет, доступен ли порт для привязки
+    
+    Args:
+        host: Хост для проверки
+        port: Порт для проверки
+        
+    Returns:
+        bool: True если порт доступен, False в противном случае
+    """
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind((host, port))
+            return True
+    except OSError:
+        return False
 
 # Получаем обязательные переменные окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN")        # Токен бота от @BotFather
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")    # URL для webhook (должен быть HTTPS)
 CHANNEL_ID = os.getenv("CHANNEL_ID")      # ID или username канала для пересылки
 USE_WEBHOOK = os.getenv("USE_WEBHOOK", "true").lower() == "true"  # Режим работы: webhook или long polling
+
+# Настройки webhook сервера
+WEBHOOK_HOST = os.getenv("WEBHOOK_HOST", "127.0.0.1")  # Хост для webhook (по умолчанию localhost)
+WEBHOOK_PORT = int(os.getenv("WEBHOOK_PORT", "8000"))   # Порт для webhook (по умолчанию 8000)
 
 # Проверяем, что все обязательные переменные установлены
 if not all([BOT_TOKEN, CHANNEL_ID]):
@@ -115,12 +138,31 @@ async def on_startup(app):
     csv_storage.debug_print_mappings()
     
     if USE_WEBHOOK:
+        # Проверяем webhook URL
+        if not WEBHOOK_URL:
+            logger.error("WEBHOOK_URL не установлен!")
+            return
+        
+        logger.info(f"Устанавливаем webhook на URL: {WEBHOOK_URL}")
+        
         # Устанавливаем webhook для получения обновлений от Telegram
-        await bot.set_webhook(
-            url=WEBHOOK_URL,
-            drop_pending_updates=True  # Игнорируем старые обновления
-        )
-        logger.info(f"Webhook установлен: {WEBHOOK_URL}")
+        try:
+            await bot.set_webhook(
+                url=WEBHOOK_URL,
+                drop_pending_updates=True  # Игнорируем старые обновления
+            )
+            logger.info(f"Webhook успешно установлен: {WEBHOOK_URL}")
+            
+            # Получаем информацию о webhook для проверки
+            webhook_info = await bot.get_webhook_info()
+            logger.info(f"Информация о webhook: {webhook_info}")
+            
+        except Exception as e:
+            logger.error(f"Ошибка при установке webhook: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+    else:
+        logger.info("Режим webhook отключен, будет использоваться long polling")
 
 
 async def on_shutdown(_):
@@ -170,8 +212,60 @@ def main():
     Создает HTTP-сервер с webhook-обработчиком для Telegram API
     """
     if USE_WEBHOOK:
+        # Проверяем доступность порта
+        host = WEBHOOK_HOST
+        port = WEBHOOK_PORT
+        
+        logger.info(f"Проверяем доступность порта {port} на {host}")
+        
+        if not is_port_available(host, port):
+            logger.error(f"Порт {port} на {host} недоступен. Возможно, он уже занят другим процессом.")
+            logger.info("Попробуйте использовать другой порт или остановить процесс, использующий порт {port}")
+            logger.info("Также проверьте настройки файрвола и права доступа")
+            return
+        
+        logger.info(f"Порт {port} на {host} доступен")
+        
         # Создаем веб-приложение
         app = web.Application()
+        
+        # Middleware для логирования всех запросов
+        @web.middleware
+        async def log_requests(request, handler):
+            # Логируем только запросы к webhook
+            if request.path == "/webhook":
+                logger.info(f"📨 Получен {request.method} запрос на /webhook")
+                logger.info(f"   Заголовки: {dict(request.headers)}")
+                
+                # Логируем тело POST запросов
+                if request.method == "POST":
+                    try:
+                        body = await request.text()
+                        logger.info(f"   Тело запроса: {body}")
+                    except Exception as e:
+                        logger.error(f"   Ошибка чтения тела запроса: {e}")
+            
+            # Продолжаем обработку
+            response = await handler(request)
+            return response
+        
+        app.middlewares.append(log_requests)
+        
+        # Добавляем отладочные маршруты для проверки
+        async def root_handler(request):
+            return web.Response(text="Telegram Bot Webhook Server is running!")
+        
+        async def health_handler(request):
+            return web.json_response({
+                "status": "ok",
+                "webhook_url": WEBHOOK_URL,
+                "host": host,
+                "port": port
+            })
+        
+        # Регистрируем базовые маршруты
+        app.router.add_get("/", root_handler)
+        app.router.add_get("/health", health_handler)
         
         # Создаем обработчик webhook для Telegram
         webhook_handler = SimpleRequestHandler(
@@ -181,15 +275,20 @@ def main():
         # Регистрируем webhook на пути /webhook
         webhook_handler.register(app, path="/webhook")
         
+        logger.info(f"Webhook зарегистрирован на пути: /webhook")
+        logger.info(f"Полный URL webhook: {WEBHOOK_URL}")
+        logger.info(f"Сервер будет слушать на: {host}:{port}")
+        
         # Добавляем обработчики запуска и остановки
         app.on_startup.append(on_startup)
         app.on_shutdown.append(on_shutdown)
 
         # Запускаем HTTP-сервер
+        logger.info(f"Запускаем HTTP-сервер на {host}:{port}")
         web.run_app(
             app,
-            host="0.0.0.0",  # Слушаем на всех интерфейсах
-            port=8000         # Порт для webhook
+            host=host,
+            port=port
         )
     else:
         asyncio.run(run_polling())

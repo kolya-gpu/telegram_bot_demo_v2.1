@@ -17,8 +17,10 @@ import os
 import asyncio
 from typing import Optional, List, Dict
 from datetime import datetime
+from logging_config import setup_logging
 
-logger = logging.getLogger(__name__)
+# Инициализируем логирование
+logger = setup_logging("csv_storage", "csv_storage.log", 5*1024*1024)  # 5MB
 
 
 class CSVMessageStore:
