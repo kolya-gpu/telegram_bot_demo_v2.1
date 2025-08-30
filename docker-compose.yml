@@ -8,11 +8,11 @@ services:
       - USE_WEBHOOK=${USE_WEBHOOK}
       - WEBHOOK_URL=${WEBHOOK_URL}
       - CHANNEL_ID=${CHANNEL_ID}
+      - CSV_FILE_PATH=${CSV_FILE_PATH:-/app/logs/message_mapping.csv}
     networks:
       - bot_network
     volumes:
       - ./logs:/app/logs
-      - ./bot:/app/csv_data
 
   nginx:
     image: nginx:alpine

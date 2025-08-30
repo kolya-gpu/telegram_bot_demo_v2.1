@@ -60,6 +60,12 @@ class CSVMessageStore:
         Создает CSV файл с заголовками, если он не существует
         """
         try:
+            # Создаем директорию для файла, если она не существует
+            directory = os.path.dirname(self.filename)
+            if directory and not os.path.exists(directory):
+                os.makedirs(directory, exist_ok=True)
+                logger.info(f"Создана директория: {directory}")
+            
             # Проверяем, существует ли файл
             if not os.path.exists(self.filename):
                 await self._create_csv_file()
@@ -69,6 +75,9 @@ class CSVMessageStore:
                 
         except Exception as e:
             logger.error(f"Ошибка при инициализации CSV хранилища: {e}")
+            logger.error(f"Попытка создания файла: {self.filename}")
+            logger.error(f"Текущая рабочая директория: {os.getcwd()}")
+            logger.error(f"Права доступа к директории: {os.access(os.path.dirname(self.filename), os.W_OK) if os.path.dirname(self.filename) else 'N/A'}")
             raise
     
     async def _create_csv_file(self):
@@ -248,20 +257,65 @@ class CSVMessageStore:
         except Exception:
             return 0
     
-    def debug_print_mappings(self):
+    async def check_file_accessibility(self) -> bool:
         """
-        Отладочный метод для вывода содержимого CSV файла
+        Проверяет доступность файла для чтения и записи
+        
+        Returns:
+            bool: True если файл доступен, False в противном случае
         """
         try:
-            if not os.path.exists(self.filename):
-                logger.info("CSV файл не существует")
-                return
+            directory = os.path.dirname(self.filename)
             
-            logger.info(f"Содержимое CSV файла {self.filename}:")
-            with open(self.filename, 'r', encoding='utf-8') as csvfile:
-                reader = csv.DictReader(csvfile)
-                for i, row in enumerate(reader, 1):
-                    logger.info(f"  {i}: {row}")
-                    
+            # Проверяем права на директорию
+            if directory and not os.access(directory, os.W_OK):
+                logger.error(f"Нет прав на запись в директорию: {directory}")
+                return False
+            
+            # Проверяем права на файл (если существует)
+            if os.path.exists(self.filename):
+                if not os.access(self.filename, os.R_OK):
+                    logger.error(f"Нет прав на чтение файла: {self.filename}")
+                    return False
+                if not os.access(self.filename, os.W_OK):
+                    logger.error(f"Нет прав на запись в файл: {self.filename}")
+                    return False
+            
+            logger.info(f"Файл {self.filename} доступен для чтения и записи")
+            return True
+            
         except Exception as e:
-            logger.error(f"Ошибка при чтении CSV файла для отладки: {e}")
+            logger.error(f"Ошибка при проверке доступности файла: {e}")
+            return False
+
+    def debug_print_mappings(self):
+        """
+        Выводит отладочную информацию о содержимом CSV файла
+        """
+        try:
+            logger.info(f"=== Отладка CSV хранилища ===")
+            logger.info(f"Файл: {self.filename}")
+            logger.info(f"Файл существует: {os.path.exists(self.filename)}")
+            logger.info(f"Абсолютный путь: {os.path.abspath(self.filename)}")
+            logger.info(f"Текущая рабочая директория: {os.getcwd()}")
+            
+            if os.path.exists(self.filename):
+                file_size = os.path.getsize(self.filename)
+                logger.info(f"Размер файла: {file_size} байт")
+                
+                if file_size > 0:
+                    try:
+                        with open(self.filename, 'r', encoding='utf-8') as csvfile:
+                            content = csvfile.read()
+                            logger.info(f"Содержимое файла:\n{content}")
+                    except Exception as e:
+                        logger.error(f"Ошибка при чтении файла: {e}")
+                else:
+                    logger.info("Файл пустой")
+            else:
+                logger.warning("Файл не существует")
+                
+            logger.info(f"===============================")
+            
+        except Exception as e:
+            logger.error(f"Ошибка при отладке CSV хранилища: {e}")

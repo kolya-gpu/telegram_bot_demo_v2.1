@@ -19,7 +19,8 @@ def setup_logging(module_name: str, log_filename: str = None, max_bytes: int = 5
         max_bytes: Максимальный размер файла логов в байтах
     """
     # Создаем директорию для логов, если её нет
-    log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
+    # Используем относительный путь для Docker контейнера
+    log_dir = "logs"
     os.makedirs(log_dir, exist_ok=True)
     
     # Путь к файлу логов

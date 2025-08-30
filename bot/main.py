@@ -73,8 +73,20 @@ if USE_WEBHOOK and not WEBHOOK_URL:
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# Создаем CSV хранилище для сообщений (путь из корневой директории проекта)
-csv_file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "message_mapping.csv")
+# Создаем CSV хранилище для сообщений (используем директорию logs)
+# Используем переменную окружения или fallback на относительный путь
+csv_file_path = os.getenv("CSV_FILE_PATH", "logs/message_mapping.csv")
+# Если путь не абсолютный, делаем его абсолютным относительно рабочей директории
+if not os.path.isabs(csv_file_path):
+    csv_file_path = os.path.join(os.getcwd(), csv_file_path)
+
+# Создаем директорию для логов, если она не существует
+os.makedirs(os.path.dirname(csv_file_path), exist_ok=True)
+
+logger.info(f"Используем CSV файл: {csv_file_path}")
+logger.info(f"Текущая рабочая директория: {os.getcwd()}")
+logger.info(f"Абсолютный путь к CSV: {os.path.abspath(csv_file_path)}")
+
 csv_storage = CSVMessageStore(csv_file_path)
 
 # Создаем обработчик сообщений с CSV хранилищем
@@ -129,6 +141,12 @@ async def on_startup(app):
     - Устанавливает URL для webhook
     """
     logger.info("Бот запускается...")
+    
+    # Проверяем доступность файла перед инициализацией
+    if not await csv_storage.check_file_accessibility():
+        logger.error("Файл CSV недоступен! Проверьте права доступа и путь к файлу.")
+        logger.error(f"Попытка использования файла: {csv_storage.filename}")
+        return
     
     # Инициализируем CSV хранилище
     await csv_storage.init()
@@ -191,6 +209,13 @@ async def run_polling():
     Запускает бота в режиме long polling без вебхука
     """
     logger.info("Запуск в режиме long polling...")
+    
+    # Проверяем доступность файла перед инициализацией
+    if not await csv_storage.check_file_accessibility():
+        logger.error("Файл CSV недоступен! Проверьте права доступа и путь к файлу.")
+        logger.error(f"Попытка использования файла: {csv_storage.filename}")
+        return
+    
     await csv_storage.init()
     
     # Отладочная информация о содержимом CSV
