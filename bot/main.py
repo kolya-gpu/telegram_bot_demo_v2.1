@@ -13,13 +13,11 @@ Telegram Bot - Пересылка сообщений в канал
 """
 
 import asyncio
-import logging
 import os
-from typing import Union
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
 from aiogram.types import Message
-from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler
 from aiohttp import web
 from dotenv import load_dotenv
 from message_handler import MessageHandler
