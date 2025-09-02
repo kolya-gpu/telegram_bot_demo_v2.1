@@ -130,6 +130,19 @@ async def handle_message(message: Message):
             await message.answer("Произошла ошибка при обработке вашего сообщения.")
 
 
+@dp.channel_post()
+async def handle_channel_post(message: Message):
+    """
+    Обработчик постов в канале (channel_post)
+    
+    Нужен для корректной обработки ответов в канале. Telegram присылает
+    сообщения из каналов как обновления типа channel_post, а не message.
+    """
+    try:
+        await message_handler.handle_channel_reply(message)
+    except Exception as e:
+        logger.error(f"Ошибка при обработке channel_post: {e}")
+
 async def on_startup(app):
     """
     Функция, выполняемая при запуске приложения
@@ -165,7 +178,13 @@ async def on_startup(app):
         try:
             await bot.set_webhook(
                 url=WEBHOOK_URL,
-                drop_pending_updates=True  # Игнорируем старые обновления
+                drop_pending_updates=True,  # Игнорируем старые обновления
+                allowed_updates=[
+                    "message",
+                    "channel_post",
+                    "edited_message",
+                    "edited_channel_post"
+                ]
             )
             logger.info(f"Webhook успешно установлен: {WEBHOOK_URL}")
             
@@ -222,7 +241,15 @@ async def run_polling():
     try:
         # На всякий случай удаляем вебхук, чтобы переключиться на polling
         await bot.delete_webhook(drop_pending_updates=True)
-        await dp.start_polling(bot)
+        await dp.start_polling(
+            bot,
+            allowed_updates=[
+                "message",
+                "channel_post",
+                "edited_message",
+                "edited_channel_post"
+            ]
+        )
     finally:
         await csv_storage.close()
         await bot.session.close()
